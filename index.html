@@ -1000,6 +1000,13 @@ async function sincronizarFincas(){
       .eq('usuario_id',CU.id)
       .eq('estado','activo');
     if(error){console.error('sincronizarFincas',error);return}
+    // Quita del caché local (localStorage del dispositivo) cualquier finca ya
+    // sincronizada a la nube (id UUID real) a la que esta cuenta ya no tenga acceso.
+    // Esto evita que, en un mismo dispositivo/navegador, una cuenta vea fincas que
+    // quedaron "pegadas" de una sesión anterior de otra cuenta. Las fincas que aún
+    // no se han migrado a la nube (id local, no-UUID) no se tocan aquí.
+    const idsAccesibles=new Set((data||[]).map(row=>row.fincas&&row.fincas.id).filter(Boolean));
+    DB.fincas=DB.fincas.filter(f=>!esUUID(f.id)||idsAccesibles.has(f.id));
     (data||[]).forEach(row=>{
       const sf=row.fincas;
       if(!sf)return;
