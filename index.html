@@ -631,7 +631,7 @@ code{background:#f3f4f6;padding:6px 8px;display:block;border-radius:6px;font-siz
       <div class="fg"><label>Nombre</label><input id="uNom" placeholder="Nombre completo"/></div>
       <div class="fg"><label>Usuario</label><input id="uUsr" placeholder="Nombre de usuario"/></div>
       <div class="fg"><label>Contraseña</label><input type="password" id="uPas" placeholder="Contraseña"/></div>
-      <div class="fg"><label>Rol</label><select id="uRol"><option value="encargado">Capataz / Encargado</option><option value="veterinario">Veterinario</option><option value="admin">Propietario / Admin</option></select></div>
+      <div class="fg"><label>Rol</label><select id="uRol"><option value="encargado">Capataz / Encargado</option><option value="veterinario">Asesor técnico</option><option value="admin">Propietario / Admin</option></select></div>
     </div>
     <div id="userMsg" class="hidden mt-2"></div>
     <div class="flex gap-2 mt-3"><button class="btn btn-gray" onclick="closeM('mUser')">Cancelar</button><button class="btn btn-green" onclick="guardarUser()">💾 Guardar</button></div>
@@ -701,7 +701,42 @@ function generarUUID(){
 const hoy=()=>new Date().toISOString().split('T')[0];
 const fmtF=f=>{if(!f)return'—';const d=new Date(f+'T00:00:00');return d.toLocaleDateString('es-CO')};
 const edad=f=>{if(!f)return'—';const d=Math.floor((new Date()-new Date(f+'T00:00:00'))/86400000);if(d<30)return d+' días';if(d<365)return Math.floor(d/30)+' meses';return(d/365).toFixed(1)+' años'};
-const rolLbl=r=>r==='admin'?'Admin':r==='encargado'?'Encargado':'Veterinario';
+const rolLbl=r=>r==='admin'?'Admin':r==='encargado'?'Encargado':'Asesor técnico';
+// Etiqueta visible para el rol dentro de una finca (usuarios_fincas.rol). El dato
+// en la base de datos sigue siendo 'veterinario'; solo cambia cómo se muestra,
+// ya que ese rol ahora puede cubrir cualquier tipo de asesor técnico del hato.
+const rolFincaLbl=r=>({propietario:'Propietario',encargado:'Encargado',veterinario:'Asesor técnico',consultor:'Consultor'}[r]||r||'—');
+// ═══ PERMISOS POR ROL DE FINCA ═══
+// Fase 1 (actual): Propietario, Encargado y Asesor técnico pueden ver y editar
+// animales, lotes e inventario RFID por igual, y ver todos los reportes. Lo único
+// reservado al Propietario es Configuración completa (datos de la finca, parámetros
+// productivos —que afectan el análisis de eficiencia reproductiva—, gestión de
+// usuarios/roles, y respaldo/borrado de datos). El "dar de baja" actual de un animal
+// ya es trazable (no borra el registro, solo lo marca inactivo) así que no está
+// restringido — eso mismo hay que preservarlo cuando en Fase 2 se agreguen los
+// registros de "muerte"/"venta": deberán quedar disponibles para los 3 roles pero
+// siempre guardando el id del animal, el motivo de salida, y quién hizo el registro.
+// true = puede ver esa sección de la app en la finca actual.
+function puedeVerSeccion(sec){
+  if(CU&&CU.rol==='admin')return true; // admin de plataforma: acceso total siempre
+  const rol=F&&F.rolFinca;
+  if(!rol)return true; // finca sin rolFinca definido aún (ej. no sincronizada): no restringir
+  if(sec==='config')return rol==='propietario';
+  return true;
+}
+// true = puede administrar la finca (Configuración: datos, parámetros, usuarios, respaldo).
+function puedeAdministrarFinca(mostrarAlerta=true){
+  if(CU&&CU.rol==='admin')return true;
+  const rol=F&&F.rolFinca;
+  if(!rol||rol==='propietario')return true;
+  if(mostrarAlerta)alert('🔒 Esta acción está reservada para el propietario de la finca.');
+  return false;
+}
+// Muestra u oculta los ítems de menú (sidebar y móvil) según el rol en la finca actual.
+function renderMenu(){
+  const verConfig=puedeVerSeccion('config');
+  document.querySelectorAll('.menuItem[data-sec="config"]').forEach(mi=>mi.classList.toggle('hidden',!verConfig));
+}
 function showA(id,tipo,msg){const e=el(id);e.className='alert alert-'+tipo;e.classList.remove('hidden');e.textContent=msg}
 function openM(id){el(id).classList.add('show')}
 function closeM(id){el(id).classList.remove('show')}
@@ -844,6 +879,7 @@ function testLS(){
 }
 // Borrar todos los datos
 function borrarTodo(){
+  if(!puedeAdministrarFinca())return;
   if(bloqueadoPorLicencia())return;
   if(!confirm('⚠️ Esto eliminará TODAS las fincas, animales e inventarios guardados. ¿Continuar?'))return;
   if(!confirm('¿Está completamente seguro? Esta acción no se puede deshacer.'))return;
@@ -861,6 +897,7 @@ function exportarRespaldo(){
 }
 // Importar respaldo
 function importarRespaldo(ev){
+  if(!puedeAdministrarFinca()){ev.target.value='';return}
   if(bloqueadoPorLicencia()){ev.target.value='';return}
   const file=ev.target.files[0];if(!file)return;
   // Conteo de datos actuales que se perderán
@@ -1158,7 +1195,7 @@ function renderFincaList(){
   if(!DB.fincas.length){c.innerHTML='<p class="text-gray text-sm" style="text-align:center;padding:16px">No hay fincas creadas. Cree la primera.</p>';return}
   c.innerHTML=DB.fincas.map(f=>{
     const pendiente=!esUUID(f.id);
-    const rolBadge=(f.rolFinca&&f.rolFinca!=='propietario')?` <span class="badge badge-blue">${f.rolFinca}</span>`:'';
+    const rolBadge=(f.rolFinca&&f.rolFinca!=='propietario')?` <span class="badge badge-blue">${rolFincaLbl(f.rolFinca)}</span>`:'';
     return `
     <div class="fincaCard" ${pendiente?'':`onclick="entrarFinca('${f.id}')"`} style="${pendiente?'cursor:default':''}">
       <div class="fincaCardInfo" style="flex:1">
@@ -1307,6 +1344,7 @@ function cambiarFinca(val){
 
 // ═══ NAVEGACIÓN ═══
 function goTo(sec){
+  if(!puedeVerSeccion(sec))sec='dashboard'; // sin permiso para esa sección en esta finca: redirige a dashboard
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.menuItem').forEach(m=>m.classList.remove('active'));
   el('sec-'+sec).classList.add('active');
@@ -1320,6 +1358,7 @@ function goTo(sec){
   if(sec==='reportes') renderReportes();
   actualizarBadgeSync();
   renderLicenciaBanner();
+  renderMenu();
 }
 
 // ═══ TUTORIAL ═══
@@ -1868,6 +1907,7 @@ function renderDash(){
 // ═══ CONFIG ═══
 function cargarCfg(){sv('cfgNombre',F.nombre);sv('cfgProp',F.propietario||'');sv('cfgMun',F.municipio||'');sv('cfgDep',F.departamento||'');sv('cfgGestBov',F.params.gestBov);sv('cfgGestBuf',F.params.gestBuf);sv('cfgDestete',F.params.destete);sv('cfgLevante',F.params.levante)}
 async function guardarCfg(){
+  if(!puedeAdministrarFinca())return;
   if(bloqueadoPorLicencia())return;
   F.nombre=v('cfgNombre')||'Mi Finca';F.propietario=v('cfgProp');F.municipio=v('cfgMun');F.departamento=v('cfgDep');
   guardar();refFincaSelector();
@@ -1883,6 +1923,7 @@ async function guardarCfg(){
   alert('✅ Configuración guardada');
 }
 async function guardarParams(){
+  if(!puedeAdministrarFinca())return;
   if(bloqueadoPorLicencia())return;
   F.params.gestBov=parseInt(v('cfgGestBov'))||285;
   F.params.gestBuf=parseInt(v('cfgGestBuf'))||310;
@@ -1904,15 +1945,16 @@ async function guardarParams(){
 function renderUsers(){
   el('tbodyUsers').innerHTML=DB.usuarios.map(u=>`<tr><td>${u.user}</td><td>${u.nombre}</td><td><span class="badge ${u.rol==='admin'?'badge-green':u.rol==='veterinario'?'badge-blue':'badge-yellow'}">${rolLbl(u.rol)}</span></td><td>${u.user!=='admin'?`<button class="btn btn-red btn-sm" onclick="delUser('${u.user}')">🗑</button>`:''}</td></tr>`).join('');
 }
-function openUserModal(){if(bloqueadoPorLicencia())return;sv('uNom','');sv('uUsr','');sv('uPas','');sv('uRol','encargado');el('userMsg').classList.add('hidden');openM('mUser')}
+function openUserModal(){if(!puedeAdministrarFinca())return;if(bloqueadoPorLicencia())return;sv('uNom','');sv('uUsr','');sv('uPas','');sv('uRol','encargado');el('userMsg').classList.add('hidden');openM('mUser')}
 function guardarUser(){
+  if(!puedeAdministrarFinca())return;
   if(bloqueadoPorLicencia())return;
   const n=v('uNom').trim(),u=v('uUsr').trim(),p=v('uPas').trim(),r=v('uRol');
   if(!n||!u||!p){showA('userMsg','error','Complete todos los campos');return}
   if(DB.usuarios.find(x=>x.user===u)){showA('userMsg','error','Usuario ya existe');return}
   DB.usuarios.push({user:u,pass:p,nombre:n,rol:r});guardar();closeM('mUser');renderUsers();
 }
-function delUser(u){if(bloqueadoPorLicencia())return;if(confirm('¿Eliminar usuario?')){DB.usuarios=DB.usuarios.filter(x=>x.user!==u);guardar();renderUsers()}}
+function delUser(u){if(!puedeAdministrarFinca())return;if(bloqueadoPorLicencia())return;if(confirm('¿Eliminar usuario?')){DB.usuarios=DB.usuarios.filter(x=>x.user!==u);guardar();renderUsers()}}
 
 // Reintenta subir la cola pendiente en cuanto el dispositivo recupera señal,
 // y además cada cierto tiempo mientras la app está abierta (por si acaso).
