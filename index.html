@@ -227,6 +227,7 @@ code{background:#f3f4f6;padding:6px 8px;display:block;border-radius:6px;font-siz
     <p>Elija la finca con la que desea trabajar o cree una nueva</p>
     <div id="fincaList"></div>
     <button class="btn btn-green btn-full mt-3" onclick="openFincaModal()">➕ Crear Nueva Finca</button>
+    <button class="btn btn-outline btn-full mt-2" onclick="openCanjearModal()">🔑 Tengo un código de invitación</button>
     <button class="btn btn-outline btn-full mt-2" onclick="refrescarFincas()">🔄 Actualizar lista</button>
     <button class="btn btn-gray btn-full mt-2" onclick="logout()">← Cerrar sesión</button>
   </div>
@@ -446,10 +447,13 @@ code{background:#f3f4f6;padding:6px 8px;display:block;border-radius:6px;font-siz
         </div>
         <div class="card">
           <div class="flex justify-between items-center mb-2">
-            <div class="cardTitle" style="margin:0">Usuarios</div>
-            <button class="btn btn-green btn-sm" onclick="openUserModal()">➕ Nuevo</button>
+            <div class="cardTitle" style="margin:0">Usuarios de la finca</div>
+            <button class="btn btn-green btn-sm" onclick="openInvitarModal()">➕ Invitar</button>
           </div>
-          <div class="tableWrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th></th></tr></thead><tbody id="tbodyUsers"></tbody></table></div>
+          <p class="text-xs text-gray mb-2">Personas con acceso activo a esta finca.</p>
+          <div id="miembrosLista"></div>
+          <div class="cardTitle mt-3" style="font-size:.8rem">Invitaciones pendientes</div>
+          <div id="invitacionesLista"></div>
         </div>
         <div class="card">
           <div class="cardTitle">Respaldo de datos</div>
@@ -623,18 +627,44 @@ code{background:#f3f4f6;padding:6px 8px;display:block;border-radius:6px;font-siz
   </div>
 </div>
 
-<!-- MODAL: Usuario -->
-<div class="modalOverlay" id="mUser">
-  <div class="modal">
-    <div class="modalTitle">👤 Nuevo Usuario<button class="modalClose" onclick="closeM('mUser')">✕</button></div>
-    <div class="formGrid">
-      <div class="fg"><label>Nombre</label><input id="uNom" placeholder="Nombre completo"/></div>
-      <div class="fg"><label>Usuario</label><input id="uUsr" placeholder="Nombre de usuario"/></div>
-      <div class="fg"><label>Contraseña</label><input type="password" id="uPas" placeholder="Contraseña"/></div>
-      <div class="fg"><label>Rol</label><select id="uRol"><option value="encargado">Capataz / Encargado</option><option value="veterinario">Asesor técnico</option><option value="admin">Propietario / Admin</option></select></div>
+<!-- MODAL: Invitar usuario a la finca -->
+<div class="modalOverlay" id="mInvitar">
+  <div class="modal" style="max-width:420px">
+    <div class="modalTitle">➕ Invitar a la finca<button class="modalClose" onclick="closeM('mInvitar')">✕</button></div>
+    <div id="invitarForm">
+      <div class="fg"><label>Nombre de la persona</label><input id="invNombre" placeholder="Ej: Juan Pérez"/></div>
+      <div class="fg mt-2"><label>Rol</label>
+        <select id="invRol">
+          <option value="encargado">Encargado</option>
+          <option value="veterinario">Asesor técnico</option>
+          <option value="consultor">Consultor</option>
+        </select>
+      </div>
+      <p class="text-xs text-gray mt-2">El código dura 7 días. Se comparte manualmente (ej. por WhatsApp) — la persona lo usa desde "Tengo un código de invitación" al iniciar sesión.</p>
+      <div id="invitarMsg" class="hidden mt-2"></div>
+      <div class="flex gap-2 mt-3"><button class="btn btn-gray" onclick="closeM('mInvitar')">Cancelar</button><button class="btn btn-green" onclick="generarInvitacion()">Generar código</button></div>
     </div>
-    <div id="userMsg" class="hidden mt-2"></div>
-    <div class="flex gap-2 mt-3"><button class="btn btn-gray" onclick="closeM('mUser')">Cancelar</button><button class="btn btn-green" onclick="guardarUser()">💾 Guardar</button></div>
+    <div id="invitarResultado" class="hidden">
+      <div class="alert alert-success" style="text-align:center">
+        <div class="text-xs">Código de invitación</div>
+        <div style="font-size:1.6rem;font-weight:700;letter-spacing:2px;margin:6px 0" id="invitarCodigoTxt"></div>
+        <div class="text-xs" id="invitarCodigoInfo"></div>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button class="btn btn-green btn-full" onclick="compartirInvitacion()">📤 Compartir por WhatsApp</button>
+      </div>
+      <button class="btn btn-gray btn-full mt-2" onclick="closeM('mInvitar')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Canjear código de invitación -->
+<div class="modalOverlay" id="mCanjear">
+  <div class="modal" style="max-width:380px">
+    <div class="modalTitle">🔑 Ingresar código<button class="modalClose" onclick="closeM('mCanjear')">✕</button></div>
+    <div class="fg"><label>Código de invitación</label><input id="canjearCodigo" placeholder="Ej: A3F9K2" style="text-transform:uppercase;font-size:1.1rem;letter-spacing:1px" oninput="this.value=this.value.toUpperCase()"/></div>
+    <div id="canjearMsg" class="hidden mt-2"></div>
+    <div class="flex gap-2 mt-3"><button class="btn btn-gray" onclick="closeM('mCanjear')">Cancelar</button><button class="btn btn-green" onclick="canjearCodigo()">Unirme</button></div>
   </div>
 </div>
 
@@ -1349,6 +1379,140 @@ function cambiarFinca(val){
   goTo('dashboard');
 }
 
+// ═══ INVITACIONES (usuarios reales de la finca) ═══
+const INVITACION_DIAS_VIGENCIA=7;
+function generarCodigoInvitacion(){
+  const chars='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // sin 0/O/1/I/L para evitar confusión al leerlo
+  let c='';
+  for(let i=0;i<6;i++)c+=chars[Math.floor(Math.random()*chars.length)];
+  return c;
+}
+function openInvitarModal(){
+  if(!puedeAdministrarFinca())return;
+  if(bloqueadoPorLicencia())return;
+  sv('invNombre','');sv('invRol','encargado');
+  el('invitarMsg').classList.add('hidden');
+  el('invitarForm').classList.remove('hidden');
+  el('invitarResultado').classList.add('hidden');
+  openM('mInvitar');
+}
+async function generarInvitacion(){
+  const nombre=v('invNombre').trim(),rol=v('invRol');
+  if(!nombre){showA('invitarMsg','error','Ingrese el nombre de la persona a invitar');return}
+  const btn=document.querySelector('#mInvitar .btn-green');
+  if(btn){btn.disabled=true;btn.textContent='Generando...'}
+  let creado=null,errFinal=null;
+  for(let intento=0;intento<3&&!creado;intento++){
+    const codigo=generarCodigoInvitacion();
+    const fechaExp=new Date();fechaExp.setDate(fechaExp.getDate()+INVITACION_DIAS_VIGENCIA);
+    const {data,error}=await sb.from('invitaciones').insert({
+      finca_id:F.id,rol,nombre_invitado:nombre,codigo,
+      creado_por:CU.id,fecha_expiracion:fechaExp.toISOString()
+    }).select().single();
+    if(!error){creado=data}
+    else if(!(error.message||'').toLowerCase().includes('duplicate')){errFinal=error;break}
+  }
+  if(btn){btn.disabled=false;btn.textContent='Generar código'}
+  if(!creado){showA('invitarMsg','error','No se pudo generar la invitación: '+(errFinal?errFinal.message:'intente de nuevo'));return}
+  window._ultimoCodigoInvitado={codigo:creado.codigo,nombre,rol};
+  el('invitarForm').classList.add('hidden');
+  el('invitarResultado').classList.remove('hidden');
+  el('invitarCodigoTxt').textContent=creado.codigo;
+  el('invitarCodigoInfo').textContent=`Para ${nombre} · ${rolFincaLbl(rol)} · válido ${INVITACION_DIAS_VIGENCIA} días`;
+  renderInvitaciones();
+}
+function compartirInvitacion(){
+  const d=window._ultimoCodigoInvitado;if(!d||!F)return;
+  const msg=encodeURIComponent(`Hola ${d.nombre}, te invito a la finca "${F.nombre}" en Ganadero Integral. Tu código de acceso es: ${d.codigo} (válido ${INVITACION_DIAS_VIGENCIA} días). Entra a https://ogdaza.github.io/ganaderiarfid/ e inicia sesión (o crea tu cuenta), luego usa la opción "Tengo un código de invitación".`);
+  window.open(`https://wa.me/?text=${msg}`,'_blank');
+}
+async function renderInvitaciones(){
+  const cont=el('invitacionesLista');
+  if(!cont||!F||!esUUID(F.id))return;
+  cont.innerHTML='<p class="text-xs text-gray">Cargando...</p>';
+  const {data,error}=await sb.from('invitaciones').select('*').eq('finca_id',F.id).eq('estado','pendiente').order('fecha_creacion',{ascending:false});
+  if(error){cont.innerHTML='<p class="text-xs text-gray">No se pudo cargar las invitaciones.</p>';return}
+  if(!data||!data.length){cont.innerHTML='<p class="text-xs text-gray">No hay invitaciones pendientes.</p>';return}
+  cont.innerHTML=data.map(i=>{
+    const vencida=i.fecha_expiracion&&new Date(i.fecha_expiracion)<new Date();
+    return `<div class="animalItem" style="background:#f9fafb">
+      <div>
+        <div class="font-bold">${i.nombre_invitado} <span class="badge badge-blue">${rolFincaLbl(i.rol)}</span></div>
+        <div class="text-xs text-gray">Código: <b style="letter-spacing:1px">${i.codigo}</b> · ${vencida?'⚠️ Vencida':'Vence '+fmtF((i.fecha_expiracion||'').split('T')[0])}</div>
+      </div>
+      <button class="btn btn-red btn-sm" onclick="cancelarInvitacion('${i.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+async function cancelarInvitacion(id){
+  if(!puedeAdministrarFinca())return;
+  if(!confirm('¿Cancelar esta invitación? El código dejará de funcionar.'))return;
+  const {error}=await sb.from('invitaciones').update({estado:'cancelada'}).eq('id',id);
+  if(error){alert('❌ No se pudo cancelar: '+error.message);return}
+  renderInvitaciones();
+}
+// Miembros con acceso activo a la finca actual
+async function renderMiembrosFinca(){
+  const cont=el('miembrosLista');
+  if(!cont||!F||!esUUID(F.id))return;
+  cont.innerHTML='<p class="text-xs text-gray">Cargando...</p>';
+  const {data,error}=await sb.from('usuarios_fincas')
+    .select('id,rol,usuario_id,usuarios(nombre,correo)')
+    .eq('finca_id',F.id).eq('estado','activo');
+  if(error){cont.innerHTML='<p class="text-xs text-gray">No se pudo cargar los usuarios.</p>';return}
+  cont.innerHTML=(data||[]).map(m=>{
+    const esYo=m.usuario_id===CU.id;
+    const nombre=(m.usuarios&&m.usuarios.nombre)||'—';
+    const correo=(m.usuarios&&m.usuarios.correo)||'';
+    const puedeQuitar=m.rol!=='propietario'&&!esYo;
+    return `<div class="animalItem" style="background:#f9fafb">
+      <div>
+        <div class="font-bold">${nombre}${esYo?' (tú)':''} <span class="badge badge-blue">${rolFincaLbl(m.rol)}</span></div>
+        <div class="text-xs text-gray">${correo}</div>
+      </div>
+      ${puedeQuitar?`<button class="btn btn-red btn-sm" onclick="quitarMiembro('${m.id}','${m.usuario_id}')">Quitar acceso</button>`:''}
+    </div>`;
+  }).join('');
+}
+// Quita el acceso de una persona a la finca. Si nunca registró datos (animales/lotes),
+// se elimina el vínculo por completo. Si ya registró algo, solo se desactiva
+// (estado='inactivo') para conservar la trazabilidad de lo que hizo.
+async function quitarMiembro(vinculoId,usuarioId){
+  if(!puedeAdministrarFinca())return;
+  if(!confirm('¿Quitar el acceso de esta persona a la finca?'))return;
+  const [rAnim,rLot]=await Promise.all([
+    sb.from('animales').select('id',{count:'exact',head:true}).eq('finca_id',F.id).eq('creado_por',usuarioId),
+    sb.from('lotes').select('id',{count:'exact',head:true}).eq('finca_id',F.id).eq('creado_por',usuarioId)
+  ]);
+  const tieneActividad=(rAnim.count||0)>0||(rLot.count||0)>0;
+  if(tieneActividad){
+    const {error}=await sb.from('usuarios_fincas').update({estado:'inactivo',actualizado_por:CU.id}).eq('id',vinculoId);
+    if(error){alert('❌ No se pudo desactivar: '+error.message);return}
+    alert('Esta persona ya registró información en la finca, así que se desactivó su acceso (se conserva su historial).');
+  }else{
+    const {error}=await sb.from('usuarios_fincas').delete().eq('id',vinculoId);
+    if(error){alert('❌ No se pudo quitar el acceso: '+error.message);return}
+    alert('✅ Acceso eliminado. No tenía registros asociados en esta finca.');
+  }
+  renderMiembrosFinca();
+}
+// Canjear un código de invitación (usuario nuevo, sin finca aún)
+function openCanjearModal(){sv('canjearCodigo','');el('canjearMsg').classList.add('hidden');openM('mCanjear')}
+async function canjearCodigo(){
+  const codigo=v('canjearCodigo').trim().toUpperCase();
+  if(!codigo){showA('canjearMsg','error','Ingrese el código de invitación');return}
+  const btn=document.querySelector('#mCanjear .btn-green');
+  if(btn){btn.disabled=true;btn.textContent='Verificando...'}
+  const {data,error}=await sb.rpc('canjear_invitacion',{p_codigo:codigo});
+  if(btn){btn.disabled=false;btn.textContent='Unirme'}
+  if(error){showA('canjearMsg','error','No se pudo procesar el código: '+error.message);return}
+  if(!data||!data.ok){showA('canjearMsg','error',(data&&data.error)||'Código inválido, ya usado o expirado');return}
+  closeM('mCanjear');
+  await sincronizarFincas();
+  renderFincaList();
+  alert('✅ ¡Listo! Ya tienes acceso a la finca.');
+}
+
 // ═══ NAVEGACIÓN ═══
 function goTo(sec){
   if(!puedeVerSeccion(sec))sec='dashboard'; // sin permiso para esa sección en esta finca: redirige a dashboard
@@ -1360,7 +1524,7 @@ function goTo(sec){
   if(sec==='animales'){renderTabla();refLoteSels()}
   if(sec==='asignarrfid'){renderAsignarRFID();sv('rfidBuscar','');el('rfidResultado').innerHTML=''}
   if(sec==='lotes') renderLotes();
-  if(sec==='config'){cargarCfg();renderUsers();renderLicenciaCard()}
+  if(sec==='config'){cargarCfg();renderMiembrosFinca();renderInvitaciones();renderLicenciaCard()}
   if(sec==='inventario'){sv('invFecha',hoy());refLoteSels()}
   if(sec==='reportes') renderReportes();
   actualizarBadgeSync();
@@ -1949,19 +2113,6 @@ async function guardarParams(){
   }
   alert('✅ Parámetros guardados');
 }
-function renderUsers(){
-  el('tbodyUsers').innerHTML=DB.usuarios.map(u=>`<tr><td>${u.user}</td><td>${u.nombre}</td><td><span class="badge ${u.rol==='admin'?'badge-green':u.rol==='veterinario'?'badge-blue':'badge-yellow'}">${rolLbl(u.rol)}</span></td><td>${u.user!=='admin'?`<button class="btn btn-red btn-sm" onclick="delUser('${u.user}')">🗑</button>`:''}</td></tr>`).join('');
-}
-function openUserModal(){if(!puedeAdministrarFinca())return;if(bloqueadoPorLicencia())return;sv('uNom','');sv('uUsr','');sv('uPas','');sv('uRol','encargado');el('userMsg').classList.add('hidden');openM('mUser')}
-function guardarUser(){
-  if(!puedeAdministrarFinca())return;
-  if(bloqueadoPorLicencia())return;
-  const n=v('uNom').trim(),u=v('uUsr').trim(),p=v('uPas').trim(),r=v('uRol');
-  if(!n||!u||!p){showA('userMsg','error','Complete todos los campos');return}
-  if(DB.usuarios.find(x=>x.user===u)){showA('userMsg','error','Usuario ya existe');return}
-  DB.usuarios.push({user:u,pass:p,nombre:n,rol:r});guardar();closeM('mUser');renderUsers();
-}
-function delUser(u){if(!puedeAdministrarFinca())return;if(bloqueadoPorLicencia())return;if(confirm('¿Eliminar usuario?')){DB.usuarios=DB.usuarios.filter(x=>x.user!==u);guardar();renderUsers()}}
 
 // Reintenta subir la cola pendiente en cuanto el dispositivo recupera señal,
 // y además cada cierto tiempo mientras la app está abierta (por si acaso).
