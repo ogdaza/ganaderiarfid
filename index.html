@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>GanaderíaRFID</title>
+<title>Ganadero Integral</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -55,6 +55,13 @@ body{font-family:Arial,sans-serif;background:#f0fdf4;min-height:100vh;font-size:
 .card{background:white;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .cardTitle{font-size:.9rem;font-weight:700;color:#166534;margin-bottom:12px}
 .pageTitle{font-size:1.1rem;font-weight:700;color:#166534;margin-bottom:12px}
+
+/* LICENCIA */
+.licenciaBar{padding:9px 16px;font-size:.8rem;font-weight:600;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.licenciaBar.info{background:#dbeafe;color:#1e40af;border-bottom:1px solid #93c5fd}
+.licenciaBar.warning{background:#fef9c3;color:#854d0e;border-bottom:1px solid #fde047}
+.licenciaBar.error{background:#fee2e2;color:#991b1b;border-bottom:1px solid #fca5a5}
+.licenciaBar button{white-space:nowrap}
 
 /* TUTORIAL BANNER */
 .tutorialBanner{background:linear-gradient(135deg,#dbeafe,#eff6ff);border:1px solid #93c5fd;border-radius:10px;padding:16px;margin-bottom:12px}
@@ -165,7 +172,7 @@ code{background:#f3f4f6;padding:6px 8px;display:block;border-radius:6px;font-siz
 <div id="loginScreen">
   <div class="loginBox">
     <div class="logo">🐄</div>
-    <h1>GanaderíaRFID</h1>
+    <h1>Ganadero Integral</h1>
     <p>Sistema de gestión ganadera</p>
     <form id="loginForm" autocomplete="on" onsubmit="return manejarLogin(event)">
       <div class="fg mt-3"><label>Correo electrónico</label><input type="email" id="loginUser" name="email" autocomplete="username" placeholder="correo@ejemplo.com" required/></div>
@@ -196,8 +203,18 @@ code{background:#f3f4f6;padding:6px 8px;display:block;border-radius:6px;font-siz
     <div class="logo">🔑</div>
     <h1>Nueva contraseña</h1>
     <p>Ingrese su nueva contraseña para continuar</p>
-    <div class="fg mt-3"><label>Nueva contraseña</label><input type="password" id="resetPass1" placeholder="Mínimo 6 caracteres"/></div>
-    <div class="fg mt-2"><label>Confirmar contraseña</label><input type="password" id="resetPass2" placeholder="Repita la contraseña"/></div>
+    <div class="fg mt-3"><label>Nueva contraseña</label>
+      <div style="position:relative">
+        <input type="password" id="resetPass1" placeholder="Mínimo 6 caracteres" style="padding-right:38px"/>
+        <button type="button" onclick="toggleResetPass(1)" id="btnToggleReset1" aria-label="Mostrar contraseña" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.05rem;line-height:1">👁️</button>
+      </div>
+    </div>
+    <div class="fg mt-2"><label>Confirmar contraseña</label>
+      <div style="position:relative">
+        <input type="password" id="resetPass2" placeholder="Repita la contraseña" style="padding-right:38px"/>
+        <button type="button" onclick="toggleResetPass(2)" id="btnToggleReset2" aria-label="Mostrar contraseña" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.05rem;line-height:1">👁️</button>
+      </div>
+    </div>
     <div id="resetMsg" class="hidden mt-2"></div>
     <button class="btn btn-green btn-full mt-3" id="btnReset" onclick="guardarNuevaContrasena()">💾 Guardar y continuar</button>
   </div>
@@ -218,7 +235,7 @@ code{background:#f3f4f6;padding:6px 8px;display:block;border-radius:6px;font-siz
 <!-- APP -->
 <div id="appScreen">
   <div class="topBar">
-    <h1>🐄 GanaderíaRFID</h1>
+    <h1>🐄 Ganadero Integral</h1>
     <div class="right">
       <select class="fincaSelector" id="fincaSelector" onchange="cambiarFinca(this.value)"></select>
       <span id="syncBadge" class="text-xs" style="opacity:.75"></span>
@@ -226,6 +243,7 @@ code{background:#f3f4f6;padding:6px 8px;display:block;border-radius:6px;font-siz
       <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:white" onclick="logout()">Salir</button>
     </div>
   </div>
+  <div id="licenciaBanner" class="hidden"></div>
   <div class="mobileNav">
     <div class="menuItem" data-sec="dashboard" onclick="goTo('dashboard')">📊 Dashboard</div>
     <div class="menuItem" data-sec="animales"  onclick="goTo('animales')">🐄 Animales</div>
@@ -402,6 +420,10 @@ code{background:#f3f4f6;padding:6px 8px;display:block;border-radius:6px;font-siz
       <!-- CONFIG -->
       <div id="sec-config" class="section">
         <div class="pageTitle">⚙️ Configuración</div>
+        <div class="card" id="licenciaCard">
+          <div class="cardTitle">📋 Licencia</div>
+          <div id="licenciaCardBody"></div>
+        </div>
         <div class="card">
           <div class="cardTitle">Datos de la finca</div>
           <div class="formGrid">
@@ -630,6 +652,9 @@ const CAT_REPRO=['Toro reproductor','Búfalo reproductor'];
 const SUPABASE_URL='https://fzhdjeonojmbldgjqvus.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6aGRqZW9ub2ptYmxkZ2pxdnVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMjc2NDgsImV4cCI6MjEwMDYwMzY0OH0.0GlMUBIvoYxDnnLAquTuvBYGE1mrgyRzvOyqdw4jCk4';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+// Número de WhatsApp para solicitudes de renovación (código país + número, sin '+' ni espacios).
+// ⚠️ Reemplazar por el número real de contacto de Gestiones Integrales antes de publicar.
+const CONTACTO_RENOVACION_WHATSAPP='573046735176';
 
 // ═══ ESTADO GLOBAL ═══
 let DB={
@@ -681,6 +706,96 @@ function showA(id,tipo,msg){const e=el(id);e.className='alert alert-'+tipo;e.cla
 function openM(id){el(id).classList.add('show')}
 function closeM(id){el(id).classList.remove('show')}
 
+// ═══ LICENCIAS (modo lectura por vencimiento) ═══
+// El estado se calcula en el dispositivo a partir de las fechas, sin depender de que
+// el campo 'estado' de la tabla 'licencias' esté actualizado por un job en el servidor.
+// Devuelve: {restringido, mensaje, banner:{tipo,msg}|null}
+function licenciaEstado(finca){
+  const lic=finca&&finca.licencia;
+  if(!lic)return{restringido:false,banner:null}; // finca sin licencia asignada aún: sin restricción
+  if(lic.bloqueo_manual){
+    const motivo=lic.motivo_bloqueo||'contacte al administrador para más información.';
+    return{restringido:true,mensaje:'Esta finca fue bloqueada manualmente: '+motivo,banner:{tipo:'error',msg:'🔒 Finca bloqueada: '+motivo}};
+  }
+  if(!lic.fecha_vencimiento)return{restringido:false,banner:null};
+  const hoyD=new Date(hoy()+'T00:00:00');
+  const venc=new Date(lic.fecha_vencimiento+'T00:00:00');
+  const diasGracia=(lic.dias_gracia!=null?lic.dias_gracia:5);
+  const diff=Math.round((venc-hoyD)/86400000); // días que faltan para vencer (negativo = ya venció)
+  const fVenc=fmtF(lic.fecha_vencimiento);
+  if(diff>30)return{restringido:false,banner:null};
+  if(diff>7)return{restringido:false,banner:{tipo:'info',msg:`ℹ️ Su licencia vence el ${fVenc} (en ${diff} días). Recuerde renovar a tiempo.`}};
+  if(diff>=1)return{restringido:false,banner:{tipo:'warning',msg:`⚠️ Su licencia vence en ${diff} día${diff===1?'':'s'} (${fVenc}). Renueve pronto para evitar interrupciones.`}};
+  if(diff>=-diasGracia){
+    const restantes=diasGracia+diff;
+    return{restringido:false,banner:{tipo:'warning',msg:`🚨 Su licencia venció el ${fVenc}. Está en periodo de gracia — quedan ${restantes} día${restantes===1?'':'s'} para renovar antes de pasar a modo solo lectura.`}};
+  }
+  return{
+    restringido:true,
+    mensaje:'Su licencia venció y el periodo de gracia terminó. La finca quedó en modo de solo lectura hasta que se renueve.',
+    banner:{tipo:'error',msg:`🔒 Licencia vencida desde el ${fVenc}. Modo solo lectura: puede ver sus datos, descargar un respaldo o solicitar la renovación, pero no guardar cambios.`}
+  };
+}
+// Punto único de control para toda acción que escriba datos (crear/editar/borrar
+// animales, lotes, inventarios, usuarios o configuración). Se llama al inicio de cada
+// función de guardado; si retorna true, esa función debe detenerse ahí mismo.
+// El administrador de la plataforma (es_admin_plataforma) SIEMPRE tiene acceso
+// completo, sin importar el estado de la licencia del cliente.
+function bloqueadoPorLicencia(mostrarAlerta=true){
+  if(!F)return false;
+  if(CU&&CU.rol==='admin')return false;
+  const est=licenciaEstado(F);
+  if(est.restringido){
+    if(mostrarAlerta)alert('🔒 '+(est.mensaje||'Esta finca está en modo de solo lectura.')+'\n\nPuede ver sus datos, descargar un respaldo o renovar la licencia desde Configuración.');
+    return true;
+  }
+  return false;
+}
+// Barra superior con el aviso de licencia. Visible para todos los usuarios vinculados
+// a la finca (propietario, encargado, veterinario); nunca para el admin de plataforma,
+// ya que a él nunca lo restringe el estado de la licencia del cliente.
+function renderLicenciaBanner(){
+  const b=el('licenciaBanner');
+  if(!b)return;
+  if(!F||(CU&&CU.rol==='admin')){b.className='hidden';b.innerHTML='';return}
+  const est=licenciaEstado(F);
+  if(!est.banner){b.className='hidden';b.innerHTML='';return}
+  b.className='licenciaBar '+est.banner.tipo;
+  b.innerHTML=`<span>${est.banner.msg}</span><button class="btn btn-sm btn-outline" style="background:white" onclick="goTo('config')">Ver licencia</button>`;
+}
+// Abre WhatsApp con un mensaje pre-armado para solicitar la renovación de la licencia.
+function solicitarRenovacion(){
+  const msg=encodeURIComponent(`Hola, quiero renovar la licencia de la finca "${F?F.nombre:''}".`);
+  window.open(`https://wa.me/${CONTACTO_RENOVACION_WHATSAPP}?text=${msg}`,'_blank');
+}
+// Tarjeta de licencia en Configuración: plan, modo, vencimiento y estado.
+function renderLicenciaCard(){
+  const c=el('licenciaCardBody');
+  if(!c||!F)return;
+  const lic=F.licencia;
+  if(!lic){
+    c.innerHTML='<p class="text-sm text-gray">Esta finca no tiene una licencia asignada todavía.</p>';
+    return;
+  }
+  const plan=lic.planes||{};
+  const est=licenciaEstado(F);
+  let estadoLbl='Activa',estadoBadge='badge-green';
+  if(est.restringido){estadoLbl=lic.bloqueo_manual?'Bloqueada':'Vencida';estadoBadge='badge-red'}
+  else if(est.banner){estadoLbl=est.banner.tipo==='error'?'Vencida':'Por vencer';estadoBadge=est.banner.tipo==='error'?'badge-red':'badge-yellow'}
+  c.innerHTML=`
+    <div class="formGrid">
+      <div class="fg"><label>Plan</label><input value="${plan.nombre||'—'}" readonly style="background:#f3f4f6"/></div>
+      <div class="fg"><label>Modo</label><input value="${plan.modo_permitido==='completo'?'Completo':'Identificación'}" readonly style="background:#f3f4f6"/></div>
+      <div class="fg"><label>Vence</label><input value="${fmtF(lic.fecha_vencimiento)}" readonly style="background:#f3f4f6"/></div>
+      <div class="fg"><label>Estado</label><input value="${estadoLbl}" readonly style="background:#f3f4f6"/></div>
+    </div>
+    ${est.banner?`<div class="alert alert-${est.banner.tipo} mt-2">${est.banner.msg}</div>`:''}
+    <div class="flex gap-2 flex-wrap mt-3">
+      <button class="btn btn-blue btn-sm" onclick="solicitarRenovacion()">💳 Solicitar renovación</button>
+      <span class="badge ${estadoBadge}" style="align-self:center">${estadoLbl}</span>
+    </div>`;
+}
+
 // ═══ PERSISTENCIA (localStorage — sobrevive cerrar el navegador) ═══
 const LS_KEY='GANADERIA_RFID_DB';
 let lsDisponible=true;
@@ -729,6 +844,7 @@ function testLS(){
 }
 // Borrar todos los datos
 function borrarTodo(){
+  if(bloqueadoPorLicencia())return;
   if(!confirm('⚠️ Esto eliminará TODAS las fincas, animales e inventarios guardados. ¿Continuar?'))return;
   if(!confirm('¿Está completamente seguro? Esta acción no se puede deshacer.'))return;
   try{localStorage.removeItem(LS_KEY)}catch(e){}
@@ -745,6 +861,7 @@ function exportarRespaldo(){
 }
 // Importar respaldo
 function importarRespaldo(ev){
+  if(bloqueadoPorLicencia()){ev.target.value='';return}
   const file=ev.target.files[0];if(!file)return;
   // Conteo de datos actuales que se perderán
   const nFincas=DB.fincas.length;
@@ -778,6 +895,11 @@ function importarRespaldo(ev){
 function toggleLoginPass(){
   const inp=el('loginPass');
   const btn=el('btnTogglePass');
+  if(inp.type==='password'){inp.type='text';btn.textContent='🙈'}
+  else{inp.type='password';btn.textContent='👁️'}
+}
+function toggleResetPass(n){
+  const inp=el('resetPass'+n),btn=el('btnToggleReset'+n);
   if(inp.type==='password'){inp.type='text';btn.textContent='🙈'}
   else{inp.type='password';btn.textContent='👁️'}
 }
@@ -837,7 +959,7 @@ async function sincronizarFincas(){
   if(!CU)return;
   try{
     const {data,error}=await sb.from('usuarios_fincas')
-      .select('rol,estado,fincas(*)')
+      .select('rol,estado,fincas(*, licencias(id,estado,fecha_inicio,fecha_vencimiento,dias_gracia,bloqueo_manual,motivo_bloqueo,plan_id,planes(id,nombre,modo_permitido,cupo_fincas,precio,duracion_meses)))')
       .eq('usuario_id',CU.id)
       .eq('estado','activo');
     if(error){console.error('sincronizarFincas',error);return}
@@ -854,11 +976,13 @@ async function sincronizarFincas(){
       if(!local){
         DB.fincas.push({
           id:sf.id,nombre:sf.nombre,propietario:sf.propietario||'',municipio:sf.municipio||'',departamento:sf.departamento||'',
-          params,lotes:[],animales:[],inventarios:[],rolFinca:row.rol
+          params,lotes:[],animales:[],inventarios:[],rolFinca:row.rol,
+          licencia:sf.licencias||null,modoFinca:sf.modo||'completo'
         });
       }else{
         local.nombre=sf.nombre;local.propietario=sf.propietario||'';local.municipio=sf.municipio||'';local.departamento=sf.departamento||'';
         local.params=params;local.rolFinca=row.rol;
+        local.licencia=sf.licencias||null;local.modoFinca=sf.modo||'completo';
       }
     });
     guardar();
@@ -1053,6 +1177,30 @@ async function migrarFincaLocal(id){
   const f=DB.fincas.find(x=>x.id===id);
   if(!f)return;
   if(!confirm(`¿Migrar la finca "${f.nombre}" a la nube?\n\nEsto la subirá a Supabase conservando todos sus animales, lotes e inventarios locales.`))return;
+  // Salvaguarda contra duplicados: si ya existe una finca con este mismo nombre
+  // vinculada a la cuenta, se pregunta antes de crear una fila nueva en Supabase.
+  const {data:posiblesDup,error:eDup}=await sb.from('usuarios_fincas')
+    .select('rol,fincas(id,nombre)')
+    .eq('usuario_id',CU.id)
+    .eq('estado','activo');
+  if(!eDup&&posiblesDup){
+    const coincidencia=posiblesDup.find(r=>r.fincas&&r.fincas.nombre.trim().toLowerCase()===f.nombre.trim().toLowerCase());
+    if(coincidencia){
+      const usarExistente=confirm(`Ya tiene una finca en la nube llamada "${coincidencia.fincas.nombre}".\n\n¿Es la misma finca? Si confirma, se usará esa (evitando duplicar) y solo se subirán los animales/lotes de esta copia local. Si cancela, se creará como una finca nueva y separada.`);
+      if(usarExistente){
+        const idViejo=f.id;
+        f.id=coincidencia.fincas.id;f.rolFinca=coincidencia.rol||'propietario';
+        if(F&&F.id===idViejo)F=f;
+        f.lotes.forEach(l=>{if(!esUUID(l.id))l.id=generarUUID();if(!l.creadoPor){l.creadoPor=CU.id;l.actualizadoPor=CU.id}l._sync='pendiente'});
+        f.animales.forEach(a=>{if(!esUUID(a.id))a.id=generarUUID();if(!a.creadoPor){a.creadoPor=CU.id;a.actualizadoPor=CU.id}a._sync='pendiente'});
+        f.lotes.forEach(l=>encolarSync('lotes',l.id,f.id));
+        f.animales.forEach(a=>encolarSync('animales',a.id,f.id));
+        guardar();renderFincaList();actualizarBadgeSync();intentarSync();
+        alert('✅ Animales y lotes vinculados a la finca existente. Se están subiendo en segundo plano.');
+        return;
+      }
+    }
+  }
   const {data:sf,error}=await sb.from('fincas').insert({
     nombre:f.nombre,propietario:f.propietario||'',municipio:f.municipio||'',departamento:f.departamento||'',
     creada_por:CU.id,
@@ -1167,10 +1315,11 @@ function goTo(sec){
   if(sec==='animales'){renderTabla();refLoteSels()}
   if(sec==='asignarrfid'){renderAsignarRFID();sv('rfidBuscar','');el('rfidResultado').innerHTML=''}
   if(sec==='lotes') renderLotes();
-  if(sec==='config'){cargarCfg();renderUsers()}
+  if(sec==='config'){cargarCfg();renderUsers();renderLicenciaCard()}
   if(sec==='inventario'){sv('invFecha',hoy());refLoteSels()}
   if(sec==='reportes') renderReportes();
   actualizarBadgeSync();
+  renderLicenciaBanner();
 }
 
 // ═══ TUTORIAL ═══
@@ -1190,12 +1339,14 @@ function renderTutorial(){
 
 // ═══ LOTES ═══
 function openLoteModal(id=null){
+  if(bloqueadoPorLicencia())return;
   editLoteId=id;sv('loteNom','');sv('loteDesc','');el('loteMsg').classList.add('hidden');
   el('mLoteTit').textContent=id?'Editar Lote':'Nuevo Lote';
   if(id){const l=F.lotes.find(x=>x.id===id);if(l){sv('loteNom',l.nombre);sv('loteDesc',l.desc||'')}}
   openM('mLote');
 }
 function guardarLote(){
+  if(bloqueadoPorLicencia())return;
   const nom=v('loteNom').trim();
   if(!nom){showA('loteMsg','error','Ingrese el nombre');return}
   if(!editLoteId&&F.lotes.find(l=>l.nombre.toLowerCase()===nom.toLowerCase())){showA('loteMsg','error','Ese lote ya existe');return}
@@ -1236,6 +1387,7 @@ function checkNuevoLote(){
 }
 function cerrarLoteRapido(){closeM('mLoteRapido')}
 function guardarLoteRapido(){
+  if(bloqueadoPorLicencia())return;
   const nom=v('loteRapidoNom').trim();
   if(!nom){showA('loteRapidoMsg','error','Ingrese el nombre');return}
   if(F.lotes.find(l=>l.nombre.toLowerCase()===nom.toLowerCase())){showA('loteRapidoMsg','error','Ese lote ya existe');return}
@@ -1246,7 +1398,7 @@ function guardarLoteRapido(){
 }
 
 // ═══ CSV ═══
-function openCSVModal(){el('csvMsg').classList.add('hidden');openM('mCSV')}
+function openCSVModal(){if(bloqueadoPorLicencia())return;el('csvMsg').classList.add('hidden');openM('mCSV')}
 // Detecta si el archivo usa ',' o ';' como separador, contando ocurrencias en la cabecera
 function detectarDelim(headerLine){
   const comas=(headerLine.match(/,/g)||[]).length;
@@ -1266,6 +1418,7 @@ function parsearLineaCSV(line,delim){
   return out.map(x=>x.trim());
 }
 function procesarCSV(ev){
+  if(bloqueadoPorLicencia()){ev.target.value='';return}
   const file=ev.target.files[0];if(!file)return;
   showA('csvMsg','info','⏳ Procesando...');
   const r=new FileReader();
@@ -1384,6 +1537,7 @@ function validarNro(){
   msg.textContent=ex?`⚠️ Número ${n} ya existe`:'✅ Número disponible';
 }
 function openAnimalModal(id=null){
+  if(bloqueadoPorLicencia())return;
   editId=id;
   ['aNro','aRFID','aNac','aNacEdadN','criaNro','partoF','criaEdad','secadoF','secadoMeses','partoEstimado','reproPro','edadN'].forEach(x=>sv(x,''));
   ['aEsp','aCat','aLot','criaSexo'].forEach(x=>sv(x,''));
@@ -1415,6 +1569,7 @@ function openAnimalModal(id=null){
   openM('mAnimal');
 }
 function guardarAnimal(){
+  if(bloqueadoPorLicencia())return;
   const nro=v('aNro').trim(),esp=v('aEsp'),cat=v('aCat'),lot=v('aLot');
   if(!nro||!esp||!cat||!lot){showA('animalMsg','error','Complete los campos obligatorios (*)');return}
   if(lot==='__nuevo__'){showA('animalMsg','error','Seleccione o cree un lote válido');return}
@@ -1453,6 +1608,7 @@ function guardarAnimal(){
   marcarYSync();
 }
 function darBaja(id){
+  if(bloqueadoPorLicencia())return;
   const a=F.animales.find(x=>x.id===id);
   if(!a||!confirm(`¿Dar de baja el animal ${a.numeroId}?`))return;
   a.estado='inactivo';a.numeroId=a.numeroId+'*';
@@ -1523,6 +1679,7 @@ function buscarParaRFID(){
     </div>`).join('');
 }
 function abrirAsignarRFID(id){
+  if(bloqueadoPorLicencia())return;
   rfidAnimalActual=id;
   const a=F.animales.find(x=>x.id===id);
   if(!a)return;
@@ -1533,6 +1690,7 @@ function abrirAsignarRFID(id){
   setTimeout(()=>el('rfidCodigo').focus(),100);
 }
 function confirmarRFID(){
+  if(bloqueadoPorLicencia())return;
   const codigo=v('rfidCodigo').trim();
   if(!codigo){showA('rfidMsgModal','error','Lea o escriba el código RFID');return}
   // Verificar que ese RFID no esté ya en otro animal
@@ -1556,6 +1714,7 @@ function exportarRFID(){
 
 // ═══ INVENTARIO ═══
 function iniciarInv(){
+  if(bloqueadoPorLicencia())return;
   const tipo=v('invTipo'),fecha=v('invFecha'),resp=v('invResp').trim(),lote=v('invLote');
   if(!fecha||!resp){alert('Complete fecha y responsable');return}
   if(tipo==='lote'&&!lote){alert('Seleccione un lote');return}
@@ -1590,6 +1749,7 @@ function procesarScan(val,esRFID){
   updInvStats();renderInvLista();
 }
 function confirmarTraslado(){
+  if(bloqueadoPorLicencia())return;
   if(!trasladoPend)return;
   const{animal:a,dest}=trasladoPend;
   if(v('trasladoAcc')==='trasladar'){
@@ -1620,6 +1780,7 @@ function renderInvLista(){
   el('invLista').innerHTML=arr.map(a=>`<div class="animalItem ${a.invEst==='encontrado'?'found':'unknown'}"><div class="flex items-center gap-2"><span>${a.invEst==='encontrado'?'✅':'⚠️'}</span><div><div class="font-bold">${a.numeroId}</div><div class="text-xs text-gray">${a.lote} — ${a.categoria}</div></div></div><div class="text-xs text-gray">${a.hora}</div></div>`).join('');
 }
 function finalizarInv(){
+  if(bloqueadoPorLicencia())return;
   if(!confirm('¿Finalizar inventario?'))return;
   invActivo.fin=new Date().toISOString();
   F.inventarios.push({...invActivo});
@@ -1707,6 +1868,7 @@ function renderDash(){
 // ═══ CONFIG ═══
 function cargarCfg(){sv('cfgNombre',F.nombre);sv('cfgProp',F.propietario||'');sv('cfgMun',F.municipio||'');sv('cfgDep',F.departamento||'');sv('cfgGestBov',F.params.gestBov);sv('cfgGestBuf',F.params.gestBuf);sv('cfgDestete',F.params.destete);sv('cfgLevante',F.params.levante)}
 async function guardarCfg(){
+  if(bloqueadoPorLicencia())return;
   F.nombre=v('cfgNombre')||'Mi Finca';F.propietario=v('cfgProp');F.municipio=v('cfgMun');F.departamento=v('cfgDep');
   guardar();refFincaSelector();
   if(esUUID(F.id)){
@@ -1721,6 +1883,7 @@ async function guardarCfg(){
   alert('✅ Configuración guardada');
 }
 async function guardarParams(){
+  if(bloqueadoPorLicencia())return;
   F.params.gestBov=parseInt(v('cfgGestBov'))||285;
   F.params.gestBuf=parseInt(v('cfgGestBuf'))||310;
   F.params.destete=parseInt(v('cfgDestete'))||8;
@@ -1741,14 +1904,15 @@ async function guardarParams(){
 function renderUsers(){
   el('tbodyUsers').innerHTML=DB.usuarios.map(u=>`<tr><td>${u.user}</td><td>${u.nombre}</td><td><span class="badge ${u.rol==='admin'?'badge-green':u.rol==='veterinario'?'badge-blue':'badge-yellow'}">${rolLbl(u.rol)}</span></td><td>${u.user!=='admin'?`<button class="btn btn-red btn-sm" onclick="delUser('${u.user}')">🗑</button>`:''}</td></tr>`).join('');
 }
-function openUserModal(){sv('uNom','');sv('uUsr','');sv('uPas','');sv('uRol','encargado');el('userMsg').classList.add('hidden');openM('mUser')}
+function openUserModal(){if(bloqueadoPorLicencia())return;sv('uNom','');sv('uUsr','');sv('uPas','');sv('uRol','encargado');el('userMsg').classList.add('hidden');openM('mUser')}
 function guardarUser(){
+  if(bloqueadoPorLicencia())return;
   const n=v('uNom').trim(),u=v('uUsr').trim(),p=v('uPas').trim(),r=v('uRol');
   if(!n||!u||!p){showA('userMsg','error','Complete todos los campos');return}
   if(DB.usuarios.find(x=>x.user===u)){showA('userMsg','error','Usuario ya existe');return}
   DB.usuarios.push({user:u,pass:p,nombre:n,rol:r});guardar();closeM('mUser');renderUsers();
 }
-function delUser(u){if(confirm('¿Eliminar usuario?')){DB.usuarios=DB.usuarios.filter(x=>x.user!==u);guardar();renderUsers()}}
+function delUser(u){if(bloqueadoPorLicencia())return;if(confirm('¿Eliminar usuario?')){DB.usuarios=DB.usuarios.filter(x=>x.user!==u);guardar();renderUsers()}}
 
 // Reintenta subir la cola pendiente en cuanto el dispositivo recupera señal,
 // y además cada cierto tiempo mientras la app está abierta (por si acaso).
